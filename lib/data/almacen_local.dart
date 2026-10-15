@@ -4,7 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../model/incidencia.dart';
 
 class AlmacenLocal {
-  final prefs = SharedPreferencesAsync();
+  // CAMBIO: inicializa preferencias solo al usarlas para evitar crear el plugin antes de tiempo.
+  late final prefs = SharedPreferencesAsync();
   final clave = 'nexasoft_incidencias_v1';
 
   Future<List<Incidencia>> leer() async {

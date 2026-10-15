@@ -2,19 +2,33 @@ import '../data/almacen_local.dart';
 import '../model/incidencia.dart';
 
 class GestorIncidencias {
-  final AlmacenLocal datos = AlmacenLocal();
+  // CAMBIO: permite inyectar el almacén para pruebas y conserva el almacén local por defecto.
+  final AlmacenLocal datos;
   List<Incidencia> incidencias = [];
   int cantidadPendientes = 0;
 
+  GestorIncidencias({AlmacenLocal? datos}) : datos = datos ?? AlmacenLocal();
+
   Future<void> iniciar() async {
     incidencias = await datos.leer();
-    cantidadPendientes =
-        incidencias.where((x) => x.estado == 'Pendiente').length;
+    _actualizarConteoPendientes();
   }
 
+  // CAMBIO: busca sin distinguir mayúsculas en ID, título, descripción y demás datos visibles.
   List<Incidencia> buscar(String texto) {
-    if (texto.trim().isEmpty) return incidencias;
-    return incidencias.where((x) => x.titulo.contains(texto)).toList();
+    final consulta = texto.trim().toLowerCase();
+    if (consulta.isEmpty) return incidencias;
+    return incidencias.where((x) {
+      final campos = [
+        x.id,
+        x.titulo,
+        x.descripcion,
+        x.cliente,
+        x.categoria,
+        x.estado,
+      ];
+      return campos.any((campo) => campo.toLowerCase().contains(consulta));
+    }).toList();
   }
 
   Incidencia? porId(String id) {
@@ -33,6 +47,9 @@ class GestorIncidencias {
     for (var i = 0; i < incidencias.length; i++) {
       if (incidencias[i].id == id) {
         incidencias[i].estado = estado;
+        // CAMBIO: guarda el nuevo estado y actualiza el contador inmediatamente.
+        _actualizarConteoPendientes();
+        await datos.guardar(incidencias);
         break;
       }
     }
@@ -50,8 +67,13 @@ class GestorIncidencias {
       fecha: DateTime.now().toIso8601String().split('T').first,
     );
     incidencias.insert(0, nuevo);
-    cantidadPendientes++;
+    _actualizarConteoPendientes();
     await datos.guardar(incidencias);
+  }
+
+  void _actualizarConteoPendientes() {
+    cantidadPendientes =
+        incidencias.where((x) => x.estado == 'Pendiente').length;
   }
 
   Future<void> reiniciarDemo() async {
