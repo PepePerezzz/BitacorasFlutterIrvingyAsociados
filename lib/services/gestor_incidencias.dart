@@ -26,9 +26,32 @@ class GestorIncidencias {
         x.cliente,
         x.categoria,
         x.estado,
+        // CAMBIO: permite encontrar incidencias por su prioridad.
+        x.prioridad,
       ];
       return campos.any((campo) => campo.toLowerCase().contains(consulta));
     }).toList();
+  }
+
+  // CAMBIO: combina búsqueda y filtros sin alterar los conteos generales.
+  List<Incidencia> filtrar(
+    String texto, {
+    String estado = 'Todos',
+    String prioridad = 'Todas',
+  }) {
+    return buscar(texto).where((x) {
+      final coincideEstado = estado == 'Todos' || x.estado == estado;
+      final coincidePrioridad =
+          prioridad == 'Todas' || x.prioridad == prioridad;
+      return coincideEstado && coincidePrioridad;
+    }).toList();
+  }
+
+  // CAMBIO: impide guardar prioridades ajenas a las opciones oficiales.
+  void _validarPrioridad(String prioridad) {
+    if (!Incidencia.prioridadesValidas.contains(prioridad)) {
+      throw ArgumentError.value(prioridad, 'prioridad', 'Prioridad no válida');
+    }
   }
 
   Incidencia? porId(String id) {
@@ -55,8 +78,11 @@ class GestorIncidencias {
     }
   }
 
-  Future<void> crear(String titulo, String descripcion, String cliente,
-      String categoria) async {
+  Future<void> crear(
+      String titulo, String descripcion, String cliente, String categoria,
+      {String prioridad = 'Media'}) async {
+    // CAMBIO: valida la prioridad antes de modificar la colección.
+    _validarPrioridad(prioridad);
     final nuevo = Incidencia(
       id: 'INC-${DateTime.now().microsecondsSinceEpoch}',
       titulo: titulo,
@@ -65,9 +91,20 @@ class GestorIncidencias {
       categoria: categoria,
       estado: 'Pendiente',
       fecha: DateTime.now().toIso8601String().split('T').first,
+      // CAMBIO: incorpora la prioridad elegida en el nuevo registro.
+      prioridad: prioridad,
     );
     incidencias.insert(0, nuevo);
     _actualizarConteoPendientes();
+    await datos.guardar(incidencias);
+  }
+
+  // CAMBIO: actualiza y persiste la prioridad desde el detalle de incidencia.
+  Future<void> cambiarPrioridad(String id, String prioridad) async {
+    _validarPrioridad(prioridad);
+    final item = porId(id);
+    if (item == null) return;
+    item.prioridad = prioridad;
     await datos.guardar(incidencias);
   }
 

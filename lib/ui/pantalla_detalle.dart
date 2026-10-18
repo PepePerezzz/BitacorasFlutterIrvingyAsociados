@@ -13,6 +13,8 @@ class PantallaDetalle extends StatefulWidget {
 
 class _PantallaDetalleState extends State<PantallaDetalle> {
   bool guardando = false;
+  // CAMBIO: serializa también las actualizaciones de prioridad.
+  bool guardandoPrioridad = false;
 
   Future<void> cambiar(String? valor) async {
     if (valor == null) return;
@@ -27,6 +29,23 @@ class _PantallaDetalleState extends State<PantallaDetalle> {
       }
     } finally {
       if (mounted) setState(() => guardando = false);
+    }
+  }
+
+  // CAMBIO: permite editar prioridad y reporta errores de persistencia.
+  Future<void> cambiarPrioridad(String? valor) async {
+    if (valor == null) return;
+    setState(() => guardandoPrioridad = true);
+    try {
+      await widget.gestor.cambiarPrioridad(widget.id, valor);
+      if (mounted) setState(() {});
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('No se pudo guardar la prioridad: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => guardandoPrioridad = false);
     }
   }
 
@@ -71,10 +90,24 @@ class _PantallaDetalleState extends State<PantallaDetalle> {
                             children: [
                               fila('Cliente', item.cliente),
                               fila('Categoría', item.categoria),
+                              // CAMBIO: muestra prioridad dentro del detalle.
+                              fila('Prioridad', item.prioridad),
                               fila('Fecha de reporte', item.fecha),
                               fila('Descripción', item.descripcion),
                             ]),
                       ),
+                    ),
+                    // CAMBIO: el detalle permite cambiar prioridad y guardarla.
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      initialValue: item.prioridad,
+                      decoration: const InputDecoration(
+                          labelText: 'Prioridad', border: OutlineInputBorder()),
+                      items: ['Baja', 'Media', 'Alta']
+                          .map(
+                              (v) => DropdownMenuItem(value: v, child: Text(v)))
+                          .toList(),
+                      onChanged: guardandoPrioridad ? null : cambiarPrioridad,
                     ),
                     const SizedBox(height: 16),
                     DropdownButtonFormField<String>(
@@ -90,6 +123,11 @@ class _PantallaDetalleState extends State<PantallaDetalle> {
                       onChanged: guardando ? null : cambiar,
                     ),
                     if (guardando)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 12),
+                        child: LinearProgressIndicator(),
+                      ),
+                    if (guardandoPrioridad)
                       const Padding(
                         padding: EdgeInsets.only(top: 12),
                         child: LinearProgressIndicator(),

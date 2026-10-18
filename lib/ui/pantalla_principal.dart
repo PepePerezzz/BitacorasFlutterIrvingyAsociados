@@ -16,6 +16,18 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
   bool cargando = true;
   String? error;
   String busqueda = '';
+  // CAMBIO: conserva el texto para que el botón de limpieza lo borre visualmente.
+  final TextEditingController controladorBusqueda = TextEditingController();
+  // CAMBIO: mantiene filtros independientes para poder combinarlos.
+  String filtroEstado = 'Todos';
+  String filtroPrioridad = 'Todas';
+
+  @override
+  void dispose() {
+    // CAMBIO: libera el controlador de búsqueda al salir de la pantalla.
+    controladorBusqueda.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -88,7 +100,9 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
 
   @override
   Widget build(BuildContext context) {
-    final items = g.buscar(busqueda);
+    // CAMBIO: aplica simultáneamente texto, estado y prioridad.
+    final items =
+        g.filtrar(busqueda, estado: filtroEstado, prioridad: filtroPrioridad);
     return Scaffold(
       appBar: AppBar(
         title: const Text('NexaSoft | Incidencias'),
@@ -169,6 +183,7 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 17, vertical: 5),
                           child: TextField(
+                            controller: controladorBusqueda,
                             decoration: const InputDecoration(
                               labelText: 'Buscar incidencias',
                               hintText: 'Ejemplo: WiFi, correo, pantalla',
@@ -179,19 +194,85 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
                                 setState(() => busqueda = texto),
                           ),
                         ),
+                        // CAMBIO: agrega filtros oficiales por estado y prioridad.
                         Padding(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 20, vertical: 4),
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text('${items.length} registros',
-                                style: const TextStyle(color: Colors.black54)),
-                          ),
+                              horizontal: 17, vertical: 4),
+                          child: Column(children: [
+                            DropdownButtonFormField<String>(
+                              initialValue: filtroEstado,
+                              isExpanded: true,
+                              decoration: const InputDecoration(
+                                  labelText: 'Filtrar por estado',
+                                  border: OutlineInputBorder(),
+                                  contentPadding: EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 10)),
+                              items: [
+                                'Todos',
+                                'Pendiente',
+                                'En proceso',
+                                'Resuelta'
+                              ]
+                                  .map((v) => DropdownMenuItem(
+                                      value: v, child: Text(v)))
+                                  .toList(),
+                              onChanged: (v) =>
+                                  setState(() => filtroEstado = v ?? 'Todos'),
+                            ),
+                            const SizedBox(height: 8),
+                            DropdownButtonFormField<String>(
+                              initialValue: filtroPrioridad,
+                              isExpanded: true,
+                              decoration: const InputDecoration(
+                                  labelText: 'Filtrar por prioridad',
+                                  border: OutlineInputBorder(),
+                                  contentPadding: EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 10)),
+                              items: ['Todas', 'Baja', 'Media', 'Alta']
+                                  .map((v) => DropdownMenuItem(
+                                      value: v, child: Text(v)))
+                                  .toList(),
+                              onChanged: (v) => setState(
+                                  () => filtroPrioridad = v ?? 'Todas'),
+                            ),
+                            Row(children: [
+                              Expanded(
+                                child: Text('${items.length} registros',
+                                    style:
+                                        const TextStyle(color: Colors.black54)),
+                              ),
+                              // CAMBIO: restablece consulta y ambos filtros en una acción.
+                              TextButton.icon(
+                                onPressed: busqueda.isEmpty &&
+                                        filtroEstado == 'Todos' &&
+                                        filtroPrioridad == 'Todas'
+                                    ? null
+                                    : () {
+                                        controladorBusqueda.clear();
+                                        setState(() {
+                                          busqueda = '';
+                                          filtroEstado = 'Todos';
+                                          filtroPrioridad = 'Todas';
+                                        });
+                                      },
+                                icon: const Icon(Icons.clear_all),
+                                label: const Text('Limpiar filtros'),
+                              ),
+                            ]),
+                          ]),
                         ),
                         Expanded(
                           child: items.isEmpty
-                              ? const Center(
-                                  child: Text('No se encontraron incidencias'))
+                              ? Center(
+                                  // CAMBIO: explica que la combinación activa no arrojó resultados.
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(24),
+                                    child: Text(
+                                      'No hay incidencias que coincidan con la búsqueda y los filtros.',
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ),
+                                )
                               : ListView.builder(
                                   padding: const EdgeInsets.only(
                                       left: 12, right: 12, bottom: 100),
@@ -223,6 +304,12 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
                                                         item.estado),
                                                     fontWeight: FontWeight.bold,
                                                   )),
+                                              // CAMBIO: muestra prioridad directamente en cada registro.
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                  'Prioridad: ${item.prioridad}',
+                                                  style: const TextStyle(
+                                                      color: Colors.black87)),
                                             ],
                                           ),
                                         ),

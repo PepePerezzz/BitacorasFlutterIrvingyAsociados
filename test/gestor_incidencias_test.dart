@@ -19,7 +19,10 @@ class AlmacenEnMemoria extends AlmacenLocal {
   }
 }
 
-Incidencia crearIncidencia({String estado = 'Pendiente'}) => Incidencia(
+// CAMBIO: permite preparar combinaciones de estado y prioridad en las pruebas.
+Incidencia crearIncidencia(
+        {String estado = 'Pendiente', String prioridad = 'Media'}) =>
+    Incidencia(
       id: 'INC-101',
       titulo: 'Impresora del almacén no responde',
       descripcion: 'Los documentos permanecen en cola.',
@@ -27,6 +30,7 @@ Incidencia crearIncidencia({String estado = 'Pendiente'}) => Incidencia(
       categoria: 'Hardware',
       estado: estado,
       fecha: '2026-10-14',
+      prioridad: prioridad,
     );
 
 void main() {
@@ -56,5 +60,52 @@ void main() {
     final gestorAlReabrir = GestorIncidencias(datos: almacen);
     await gestorAlReabrir.iniciar();
     expect(gestorAlReabrir.porId('INC-101')?.estado, 'Resuelta');
+  });
+
+  // CAMBIO: verifica prioridades, persistencia, validación y combinación de filtros.
+  test('crea y edita prioridad, y conserva el cambio al reabrir', () async {
+    final almacen = AlmacenEnMemoria([crearIncidencia()]);
+    final gestor = GestorIncidencias(datos: almacen);
+    await gestor.iniciar();
+
+    await gestor.crear(
+        'Servidor lento', 'Respuesta tardía', 'Cliente demo', 'Software',
+        prioridad: 'Alta');
+    final nueva = gestor.incidencias.first;
+    expect(nueva.prioridad, 'Alta');
+
+    await gestor.cambiarPrioridad(nueva.id, 'Baja');
+    final gestorAlReabrir = GestorIncidencias(datos: almacen);
+    await gestorAlReabrir.iniciar();
+    expect(gestorAlReabrir.porId(nueva.id)?.prioridad, 'Baja');
+  });
+
+  test('rechaza prioridades que no están en las opciones aprobadas', () async {
+    final gestor = GestorIncidencias(datos: AlmacenEnMemoria([]));
+    await gestor.iniciar();
+    await expectLater(
+      gestor.crear('Título', 'Descripción', 'Cliente', 'Software',
+          prioridad: 'Urgente'),
+      throwsArgumentError,
+    );
+    await expectLater(
+      gestor.cambiarPrioridad('INC-101', 'Urgente'),
+      throwsArgumentError,
+    );
+  });
+
+  test('combina texto, estado y prioridad en los filtros', () {
+    final gestor = GestorIncidencias();
+    gestor.incidencias = [
+      crearIncidencia(prioridad: 'Alta'),
+      crearIncidencia(estado: 'Resuelta', prioridad: 'Alta')..id = 'INC-102',
+      crearIncidencia(prioridad: 'Media')..id = 'INC-103',
+    ];
+
+    final resultado =
+        gestor.filtrar('impresora', estado: 'Pendiente', prioridad: 'Alta');
+    expect(resultado.map((x) => x.id), ['INC-101']);
+    expect(
+        gestor.filtrar('', estado: 'Todos', prioridad: 'Todas'), hasLength(3));
   });
 }
